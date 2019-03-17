@@ -1,6 +1,8 @@
 /************************************************************************************
- *  Copyright (c) March 2019, version 1.0     Paul van Haastrecht
- *
+ *  Copyright (c) March 2019, initial version Paul van Haastrecht
+ *  
+ *  version 1.0.1 / March 2019
+ *     Added base-option for PM2.5 and PM10
  *
  *  =========================  Highlevel description ================================
  *
@@ -17,7 +19,7 @@
  * could not be combined with other sensors. For the SPS30 you will need the library
  * from https://github.com/paulvha/sps30
  * 
- * !!!!!!! See the seperate document (AQ.odt) for reasons and more information !!!!!. 
+ * !!!!!!! See the seperate document (AQI.odt) for reasons and more information !!!!!. 
  *
  *  =========================  SPS30 Hardware connections =================================
  *  /////////////////////////////////////////////////////////////////////////////////
@@ -45,7 +47,7 @@
  *  Depending on the Wire / I2C buffer size we might not be able to read all the values.
  *  The buffer size needed is at least 60 while on many boards this is set to 32. The driver
  *  will determine the buffer size and if less than 64 only the MASS values are returned.
- *  You can manually edit the Wire.h of your board to increase (if you memory is larg enough)
+ *  You can manually edit the Wire.h of your board to increase (if you memory is large enough)
  *  One can check the expected number of bytes with the I2C_expect() call as in this example
  *  see detail document.
  *
@@ -67,7 +69,7 @@
  *  
  *  ================================= PARAMETERS =====================================
  *
- *  From line 95 there are configuration parameters for the program
+ *  From line 99 there are configuration parameters for the program
  *
  *  ================================== SOFTWARE ======================================
  *  Sparkfun ESP32
@@ -94,7 +96,7 @@
 #include <sps30.h>
 
 /////////////////////////////////////////////////////////////
-#define VERSION "1.0"
+#define VERSION "1.0.1"
 
 /////////////////////////////////////////////////////////////
 /*define communication channel to use for SPS30
@@ -172,6 +174,7 @@ AQI aqi;
 struct AQI_NVRAM nv;              // holds NVRAM info
 char keyb[KEYB_BUF +1];           // holds keyboard input
 bool show_measurements = false;   // display measurements performed
+bool base = HISTORY;              // PM2.5 and PM10 values to use
 
 void setup() 
 {
@@ -234,6 +237,7 @@ void loop()
     else if (strcmp(keyb,"gethour") == 0) get_current_hour();
     else if (strcmp(keyb,"aqi") == 0) read_aqi();
     else if (strcmp(keyb,"show") == 0)  show_measurements = !show_measurements;
+    else if (strcmp(keyb,"base") == 0)  base = !base;
     else Serial.println(F("Unknown command"));
   }
   
@@ -251,12 +255,15 @@ void disp_help()
   Serial.print(F("\n*************** HELP **************** Version :"));
   Serial.println(VERSION);
   Serial.println(F("region : update region code"));
+  Serial.print  (F("base   : toggle PM2.5 / PM10 value to use, currently "));
+  if(base == YESTERDAY) Serial.println(F("from PREVIOUS day"));
+  else Serial.println(F("from HISTORY"));
   Serial.println(F("aqi    : obtain air quality based region code"));
   Serial.println(F("gethour: get the current hour being captured"));
   Serial.println(F("sethour: set the current hour of current day"));
   Serial.println(F("nvram  : read after-day NVRAM values"));
   Serial.println(F("ram    : read during-hour & during-day volatile RAM values"));
-  Serial.println(F("show   : toggle display measured values"));
+  Serial.println(F("show   : toggle display current measured values"));
   Serial.println(F("clear  : clear NVRAM values"));
   Serial.println(F("update : update NVRAM values"));
   Serial.println(F("force  : force adding current day statistics to NVRAM"));
@@ -416,7 +423,7 @@ void set_current_hour()
   
   // display current hour
   get_current_hour();
-
+ 
   if (get_new_number() == 1) {
     hour = (uint8_t) atoi(keyb);
     
@@ -425,14 +432,14 @@ void set_current_hour()
       Serial.println(F(" : invalid hour number. No change"));
     }
     else {
-      if (aqi.SetHour(hour))    Serial.print(F("completed"));
+      if (aqi.SetHour(hour)) Serial.print(F("completed"));
       else Serial.print(F("update failed"));
       get_current_hour();
     }
   }
   else {
     Serial.print(keyb);
-    Serial.println(F(" : invalid entry. No change"));
+    Serial.println(F(" : NO change"));
   }
 }
 
@@ -453,32 +460,32 @@ void read_aqi()
   struct AQI_info r;
   
   // read nvram and calculate AQI
-  if ( ! aqi.GetAqi(&r)) {
+  if ( ! aqi.GetAqi(&r, base)) {
     Serial.println(F("ERROR : No data or NO region selected"));
     return;
   }
   
   disp_region(r.nv._region);
+
+  print_column("PM2.5 and PM10 used :",30);
+  if(r.base == YESTERDAY) Serial.println(F("from PREVIOUS day"));
+  else Serial.println(F("from HISTORY"));
   
-  print_column("Air Quality Index (AQI) :",30);
+  print_column("Air Quality Index calculated:",30);
   Serial.print(r.aqi_index);
   Serial.print(F("  means: "));
   Serial.println(r.aqi_name);
 
   print_column("The AQI is driven by  :",30);
-  if(r.aqi_indicator) {
-    Serial.print(F("PM2.5  value: "));
-    Serial.println(r.nv._25um_prev);
-  }
-  else {
-    Serial.print(F("PM10   value: "));
-    Serial.println(r.nv._10um_prev);
-  }
-  print_column("Current polution band      :",30);
+  if(r.aqi_indicator == PM25) Serial.print(F("PM2.5  value: "));
+  else Serial.print(F("PM10   value: "));
+  Serial.println(r.aqi_pmvalue);
+  
+  print_column("Current pollution band      :",30);
   Serial.println(r.aqi_bnd);
-  print_column("Current polution band low  :",30);
+  print_column("Current pollution band low  :",30);
   Serial.println(r.aqi_bnd_low);
-  print_column("Current polution band high :",30);
+  print_column("Current pollution band high :",30);
   Serial.println(r.aqi_bnd_high);
 
   disp_bnd_europe(&r.nv,false);
@@ -503,7 +510,7 @@ void clear_nvram()
       Serial.print(F("completed"));
     }
     else {
-      Serial.print(F("Unknown command : "));
+      Serial.print(F("Cancelled unknown command : "));
       Serial.println(keyb);
     }
 }
@@ -556,7 +563,7 @@ void read_Ram()
   print_column("Number of hours to go:",40);
   Serial.println(24 -(r._daily_offset + r._daily_cnt));
   
-  print_column("Total PM2.5 measured this day sofar:",40);
+  print_column("Total PM2.5 measured this day so far:",40);
   Serial.print(r._daily_25um);
   
   if (r._daily_cnt > 0) {
@@ -565,7 +572,7 @@ void read_Ram()
   }
   
   Serial.println();
-  print_column("Total PM10 measured this day sofar:",40);
+  print_column("Total PM10 measured this day so far:",40);
   Serial.print(r._daily_10um);
   
   if (r._daily_cnt > 0) {
@@ -588,7 +595,7 @@ void read_Ram()
  */
 void disp_region(uint8_t region)
 {
-  print_column("Region selected :",30);
+  print_column("Region selected : ",30);
 
   for (byte x = 0 ; x < sizeof(regions)/sizeof(struct AQI_region) ; x++)
   {
@@ -599,15 +606,15 @@ void disp_region(uint8_t region)
   }
 
   Serial.print(region);
-  Serial.println(F(" Unknown region code"));
+  Serial.println(F("Unknown region code"));
 }
 
 /**
  * @brief : display europe specific band info
  * @param nn : pointer to structure
  * @bool hour : 
- *   true : display hours only. struct AQI_stats is expected 
- *   false : also display days info struct AQI_NVRAM is expected
+ *   true :  display current hours only. struct AQI_stats is expected 
+ *   false : also display previous day hours and total days info struct AQI_NVRAM is expected
  * 
  * This has been done to make it easier to display the Europe only information
  * from a single place
@@ -885,7 +892,7 @@ void write_nvram()
   if (change_done) aqi.SetStats(&nv);
 
 write_end:
-  Serial.println(F("\n****** MEASUREMENT RESTARTING *************"));
+  Serial.println(F("\n****** MEASUREMENT RESUMING *************"));
 }
 
 /**
@@ -903,6 +910,8 @@ void write_region()
       Serial.println(regions[x].name);
     }
 
+    Serial.println();
+    
     if (get_new_number() != 1) return;
 
     y = (uint8_t) atoi(keyb);

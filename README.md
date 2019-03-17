@@ -12,11 +12,11 @@ at end-of-day it will be combined with data from previous days that is stored in
 
 As part of a longer term project to understand air quality, I have been working
 to test and implement  different sensors. One of the aspects that keeps coming back
-is Air Quality Index (AQI). Actually I should say index-es. (plural)
+is Air Quality Index (AQI). Actually I should say index-es. (plural)<br>
 There are MANY different AQI definitions and while they all provide an
 indication of the air quality: they are not the same. They use different
 bands/ranges, different limits, different pollutants, different timing
-(hourly, daily or yearly), different….. different…
+(hourly, daily or yearly), different….. different… <br>
 Next to AQI in the different regions of the world (some have multiple AQI
 in the same region) there are also suppliers that have added
 to the confusion by creating their own definition.
@@ -24,12 +24,12 @@ to the confusion by creating their own definition.
 While most AQI use a combination of pollutants, this library is only using
 PM2.5 and/or PM10 to determine an index. So it is not a 100% correct.
 
-I have used the AQI definitions from the USA, Europe, India, Canada and UK .
+I have used the Air Quality definitions from the USA, Europe, India, Canada and UK.
 
 It is designed and tested only for ESP32. See document for reasons
 
 ## Prerequisites
-Examples 10 has a dependency on other libraries. Documented in sketch
+Examples 10 has a dependency on other libraries. Documented in sketch.
 
 ## Software installation
 Obtain the zip and install like any other
@@ -42,6 +42,10 @@ Please see the description in the top of the sketch and read the documentation (
 
 ### version 1.0 / March 2019
  * Initial version ESP32
+
+### version 1.0.1 / March 2019
+ * Added base-option to GetAqi()
+ * number cosmetic changes
 
 ## Author
  * Paul van Haastrecht (paulvha@hotmail.com)

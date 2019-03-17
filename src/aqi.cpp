@@ -26,6 +26,9 @@
  **********************************************************************
  * Version 1.0 / March 2019
  * - Initial version by paulvha
+ *
+ * version 1.0.1 / March 2019
+ * -  Added base-option for PM2.5 and PM10
  */
 
 #include "aqi.h"
@@ -136,6 +139,10 @@ bool AQI::ForceUpdate()
  * @param hour : the hours to offset (between 0 and 23)
  *
  * will reset the current day stored values.
+ *
+ * @return
+ *  false if incorrect hour provided
+ *  true if OK
  */
 bool AQI::SetHour(uint8_t hour)
 {
@@ -163,8 +170,8 @@ uint8_t AQI::GetHour()
 
 /**
  * @brief : store measurement samples. They will be grouped by the hour
- * @param um25 : measured value of 2.5um
- * @param um10 : measured value of 10um
+ * @param um25 : measured value of PM2.5
+ * @param um10 : measured value of PM10
  */
 void AQI::Capture(float um25, float um10)
 {
@@ -295,9 +302,9 @@ void AQI::AfterDay()
     write_nvram(&nv);
 }
 
-//////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 //  RAM routines                                             //
-//////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////
 
 /**
  * @brief : read current statistics stored in RAM
@@ -346,9 +353,7 @@ float AQI::read_nv_float(uint8_t addr)
     FloatToBYTE conv;
     uint8_t i;
 
-    for (i = 0; i < 4; i++){
-       conv.array[3-i] = EEPROM.read(addr++);
-    }
+    for (i = 0; i < 4; i++) conv.array[3-i] = EEPROM.read(addr++);
 
     return conv.value;
 }
@@ -366,9 +371,7 @@ void AQI::write_nv_float(uint8_t addr, float val)
     uint8_t i;
 
     conv.value = val;
-    for (i = 0; i < 4; i++){
-       EEPROM.write(addr++,conv.array[3-i]);
-    }
+    for (i = 0; i < 4; i++) EEPROM.write(addr++,conv.array[3-i]);
 }
 
 /**
@@ -503,17 +506,22 @@ void AQI::write_nvram(struct AQI_NVRAM *nv)
 
 /**
  * @brief : calculate the AQI status based on the stored values
+ * @param r : structure to store return values
+ * @param base :
+ *  YESTERDAY : will use the PM25 and PM10 from previous day to compare
+ *  HISTORY : will use the long term PM25 and PM10 values to compare
  *
  * @return
  *  false  : no values stored (yet) or no area : no reporting possible
  *  true   : succesfully completed
  */
-bool AQI::GetAqi(struct AQI_info *r)
+bool AQI::GetAqi(struct AQI_info *r, bool base)
 {
     uint8_t x;
     uint8_t stat_25um = 0;
     uint8_t stat_10um = 0;
     float aqi;
+    float ref_PM25, ref_PM10;
 
     if (r == NULL) return(false);
 
@@ -523,7 +531,21 @@ bool AQI::GetAqi(struct AQI_info *r)
     // if none values / days or no area selected
     if (r->nv._cnt == 0 || r->nv._region == 0)  return(false);
 
-    // ***** calculate AQI depending on area based on previous day *******************
+    // indicat the used base values
+    r->base = base;
+
+    if (base == YESTERDAY)
+    {
+        ref_PM25 = r->nv._25um_prev;
+        ref_PM10 = r->nv._10um_prev;
+    }
+    else
+    {
+        ref_PM25 = r->nv._25um / r->nv._cnt;
+        ref_PM10 = r->nv._10um / r->nv._cnt;
+    }
+
+    // ***** calculate AQI depending on area  *******************
 
     if (r->nv._region == USA)
     {
@@ -531,12 +553,12 @@ bool AQI::GetAqi(struct AQI_info *r)
         for (x = 0; x <  sizeof(AQI_USA) / sizeof(struct AQI_area); x++)
         {
             // find the situation
-            if (r->nv._25um_prev >= AQI_USA[x]._25um_low && r->nv._25um_prev <= AQI_USA[x]._25um_high)
+            if (ref_PM25 >= AQI_USA[x]._25um_low && ref_PM25 <= AQI_USA[x]._25um_high)
             {
                 stat_25um = x;
             }
 
-            if (r->nv._10um_prev >= AQI_USA[x]._10um_low && r->nv._10um_prev <= AQI_USA[x]._10um_high)
+            if (ref_PM10 >= AQI_USA[x]._10um_low && ref_PM10 <= AQI_USA[x]._10um_high)
             {
                 stat_10um = x;
             }
@@ -546,26 +568,26 @@ bool AQI::GetAqi(struct AQI_info *r)
         {
             // use the 2.5um to calculate the AQI
             aqi = (AQI_USA[stat_25um]._val_high - AQI_USA[stat_25um]._val_low) / (AQI_USA[stat_25um]._25um_high -AQI_USA[stat_25um]._25um_low);
-            aqi = aqi * (r->nv._25um_prev - AQI_USA[stat_25um]._25um_low) + AQI_USA[stat_25um]._val_low;
+            aqi = aqi * (ref_PM25 - AQI_USA[stat_25um]._25um_low) + AQI_USA[stat_25um]._val_low;
 
             strcpy(r->aqi_name, AQI_USA[stat_25um].cat_name);
             r->aqi_bnd_high = AQI_USA[stat_25um]._val_high;
             r->aqi_bnd_low = AQI_USA[stat_25um]._val_low;
             r->aqi_bnd = stat_25um+1;
-            r->aqi_indicator = true;
+            r->aqi_indicator = PM25;
         }
 
         else
         {
             // use the 10um situation as it is worse than 2.5um
             aqi = (AQI_USA[stat_10um]._val_high - AQI_USA[stat_10um]._val_low) / (AQI_USA[stat_10um]._10um_high -AQI_USA[stat_10um]._10um_low);
-            aqi = aqi * (r->nv._10um_prev - AQI_USA[stat_10um]._10um_low) + AQI_USA[stat_10um]._val_low;
+            aqi = aqi * (ref_PM10 - AQI_USA[stat_10um]._10um_low) + AQI_USA[stat_10um]._val_low;
 
             strcpy(r->aqi_name, AQI_USA[stat_10um].cat_name);
             r->aqi_bnd_high = AQI_USA[stat_10um]._val_high;
             r->aqi_bnd_low = AQI_USA[stat_10um]._val_low;
             r->aqi_bnd = stat_10um+1;
-            r->aqi_indicator = false;
+            r->aqi_indicator = PM10;
         }
 
         r->aqi_index = aqi;
@@ -584,20 +606,20 @@ bool AQI::GetAqi(struct AQI_info *r)
 
         for (x = 0; x < sizeof(AQI_CAQI_daily) / sizeof(struct AQI_area); x++)
         {
-            if (r->nv._10um_prev > AQI_CAQI_daily[x]._10um_low && r->nv._10um_prev <= AQI_CAQI_daily[x]._10um_high)
+            if (ref_PM10 > AQI_CAQI_daily[x]._10um_low && ref_PM10 <= AQI_CAQI_daily[x]._10um_high)
             {
                 stat_10um = x;
             }
         }
 
         aqi = (AQI_CAQI_daily[stat_10um]._val_high - AQI_CAQI_daily[stat_10um]._val_low) / (AQI_CAQI_daily[stat_10um]._10um_high - AQI_CAQI_daily[stat_10um]._10um_low);
-        aqi = aqi * (r->nv._10um_prev - AQI_CAQI_daily[stat_10um]._10um_low) + AQI_CAQI_daily[stat_10um]._val_low;
+        aqi = aqi * (ref_PM10 - AQI_CAQI_daily[stat_10um]._10um_low) + AQI_CAQI_daily[stat_10um]._val_low;
 
         strcpy(r->aqi_name, AQI_CAQI_daily[stat_10um].cat_name);
         r->aqi_bnd_high = AQI_CAQI_daily[stat_10um]._val_high;
         r->aqi_bnd_low = AQI_CAQI_daily[stat_10um]._val_low;
         r->aqi_bnd = stat_10um+1;
-        r->aqi_indicator = false;
+        r->aqi_indicator = PM10;
         r->aqi_index = aqi;
     }
     else if (r->nv._region == EUROPE2)
@@ -613,20 +635,20 @@ bool AQI::GetAqi(struct AQI_info *r)
 
         for (x = 0; x < sizeof(AQI_CAQI_daily) / sizeof(struct AQI_area); x++)
         {
-            if (r->nv._25um_prev > AQI_CAQI_daily[x]._25um_low && r->nv._25um_prev <= AQI_CAQI_daily[x]._25um_high)
+            if (ref_PM25 > AQI_CAQI_daily[x]._25um_low && ref_PM25 <= AQI_CAQI_daily[x]._25um_high)
             {
                 stat_25um = x;
             }
         }
 
         aqi = (AQI_CAQI_daily[stat_25um]._val_high - AQI_CAQI_daily[stat_25um]._val_low) / (AQI_CAQI_daily[stat_25um]._25um_high -AQI_CAQI_daily[stat_25um]._25um_low);
-        aqi = aqi * (r->nv._25um_prev - AQI_CAQI_daily[stat_25um]._25um_low) + AQI_CAQI_daily[stat_25um]._val_low;
+        aqi = aqi * (ref_PM25 - AQI_CAQI_daily[stat_25um]._25um_low) + AQI_CAQI_daily[stat_25um]._val_low;
 
         strcpy(r->aqi_name, AQI_CAQI_daily[stat_25um].cat_name);
         r->aqi_bnd_high = AQI_CAQI_daily[stat_25um]._val_high;
         r->aqi_bnd_low = AQI_CAQI_daily[stat_25um]._val_low;
         r->aqi_bnd = stat_25um+1;
-        r->aqi_indicator = true;
+        r->aqi_indicator = PM25;
         r->aqi_index = aqi;
     }
     else if (r->nv._region == UK)
@@ -635,12 +657,12 @@ bool AQI::GetAqi(struct AQI_info *r)
         for (x = 0; x < sizeof(UK_daily) / sizeof(struct AQI_area); x++)
         {
             // find the situation
-            if (r->nv._25um_prev > UK_daily[x]._25um_low && r->nv._25um_prev <= UK_daily[x]._25um_high)
+            if (ref_PM25 > UK_daily[x]._25um_low && ref_PM25 <= UK_daily[x]._25um_high)
             {
                 stat_25um = x;
             }
 
-            if (r->nv._10um_prev > UK_daily[x]._10um_low && r->nv._10um_prev <= UK_daily[x]._10um_high)
+            if (ref_PM10 > UK_daily[x]._10um_low && ref_PM10 <= UK_daily[x]._10um_high)
             {
                 stat_10um = x;
             }
@@ -648,21 +670,21 @@ bool AQI::GetAqi(struct AQI_info *r)
 
         if (stat_25um == stat_10um || stat_25um > stat_10um ) {
             // use the 2.5um as the AQI
-            r->aqi_index = r->nv._25um_prev;
+            r->aqi_index = ref_PM25;
             strcpy(r->aqi_name, UK_daily[stat_25um].cat_name);
             r->aqi_bnd_high = UK_daily[x]._25um_high;
             r->aqi_bnd_low = UK_daily[x]._25um_low;
             r->aqi_bnd = stat_25um+1;
-            r->aqi_indicator = true;
+            r->aqi_indicator = PM25;
         }
         else {
             // use the 10um as the AQI
-            r->aqi_index = r->nv._10um_prev;
+            r->aqi_index = ref_PM10;
             strcpy(r->aqi_name, UK_daily[stat_10um].cat_name);
             r->aqi_bnd_high = UK_daily[x]._10um_high;
             r->aqi_bnd_low = UK_daily[x]._10um_low;
             r->aqi_bnd = stat_10um+1;
-            r->aqi_indicator = false;
+            r->aqi_indicator = PM10;
         }
     }
     else if (r->nv._region == INDIA)
@@ -671,12 +693,12 @@ bool AQI::GetAqi(struct AQI_info *r)
         for (x = 0; x < sizeof(AQI_INDIA) / sizeof(struct AQI_area); x++)
         {
             // find the situation
-            if (r->nv._25um_prev >= AQI_INDIA[x]._25um_low && r->nv._25um_prev <= AQI_INDIA[x]._25um_high)
+            if (ref_PM25 >= AQI_INDIA[x]._25um_low && ref_PM25 <= AQI_INDIA[x]._25um_high)
             {
                 stat_25um = x;
             }
 
-            if (r->nv._10um_prev>= AQI_INDIA[x]._10um_low && r->nv._10um_prev <= AQI_INDIA[x]._10um_high)
+            if (ref_PM10>= AQI_INDIA[x]._10um_low && ref_PM10 <= AQI_INDIA[x]._10um_high)
             {
                 stat_10um = x;
             }
@@ -686,26 +708,26 @@ bool AQI::GetAqi(struct AQI_info *r)
         {
             // use the 2.5um to calculate the AQI
             aqi = (AQI_INDIA[stat_25um]._val_high - AQI_INDIA[stat_25um]._val_low) / (AQI_INDIA[stat_25um]._25um_high -AQI_INDIA[stat_25um]._25um_low);
-            aqi = aqi * (r->nv._25um_prev - AQI_INDIA[stat_25um]._25um_low) + AQI_INDIA[stat_25um]._val_low;
+            aqi = aqi * (ref_PM25 - AQI_INDIA[stat_25um]._25um_low) + AQI_INDIA[stat_25um]._val_low;
 
             strcpy(r->aqi_name, AQI_INDIA[stat_25um].cat_name);
             r->aqi_bnd_high = AQI_INDIA[stat_25um]._val_high;
             r->aqi_bnd_low = AQI_INDIA[stat_25um]._val_low;
             r->aqi_bnd = stat_25um+1;
-            r->aqi_indicator = true;
+            r->aqi_indicator = PM25;
         }
 
         else
         {
             // use the 10um situation as it is worse than 2.5um
             aqi = (AQI_INDIA[stat_10um]._val_high - AQI_INDIA[stat_10um]._val_low) / (AQI_INDIA[stat_10um]._10um_high -AQI_INDIA[stat_10um]._10um_low);
-            aqi = aqi * (r->nv._10um_prev - AQI_INDIA[stat_10um]._10um_low) + AQI_INDIA[stat_10um]._val_low;
+            aqi = aqi * (ref_PM10 - AQI_INDIA[stat_10um]._10um_low) + AQI_INDIA[stat_10um]._val_low;
 
             strcpy(r->aqi_name, AQI_INDIA[stat_10um].cat_name);
             r->aqi_bnd_high = AQI_INDIA[stat_10um]._val_high;
             r->aqi_bnd_low = AQI_INDIA[stat_10um]._val_low;
             r->aqi_bnd = stat_10um+1;
-            r->aqi_indicator = false;
+            r->aqi_indicator = PM10;
         }
 
         r->aqi_index = aqi;
@@ -716,20 +738,20 @@ bool AQI::GetAqi(struct AQI_info *r)
         for (x = 0; x < sizeof(CAN_AQI) / sizeof(struct AQI_area); x++)
         {
             // find the situation
-            if (r->nv._25um_prev >= CAN_AQI[x]._25um_low && r->nv._25um_prev <= CAN_AQI[x]._25um_high)
+            if (ref_PM25 >= CAN_AQI[x]._25um_low && ref_PM25 <= CAN_AQI[x]._25um_high)
             {
                 stat_25um = x;
             }
         }
 
         r->aqi_index = (CAN_AQI[stat_25um]._val_high - CAN_AQI[stat_25um]._val_low) / (CAN_AQI[stat_25um]._25um_high -CAN_AQI[stat_25um]._25um_low);
-        r->aqi_index = r->aqi_index * (r->nv._25um_prev - CAN_AQI[stat_25um]._25um_low) + CAN_AQI[stat_25um]._val_low;
+        r->aqi_index = r->aqi_index * (ref_PM25 - CAN_AQI[stat_25um]._25um_low) + CAN_AQI[stat_25um]._val_low;
 
         strcpy(r->aqi_name, CAN_AQI[stat_25um].cat_name);
         r->aqi_bnd_high = CAN_AQI[stat_25um]._val_high;
         r->aqi_bnd_low = CAN_AQI[stat_25um]._val_low;
         r->aqi_bnd = stat_25um+1;
-        r->aqi_indicator = true;
+        r->aqi_indicator = PM25;
     }
 
     else if (r->nv._region == CANADA2)
@@ -738,7 +760,7 @@ bool AQI::GetAqi(struct AQI_info *r)
         for (x = 0; x < sizeof(CAN_AQHI) / sizeof(struct AQI_area); x++)
         {
             // find the situation
-            if (r->nv._25um_prev >= CAN_AQHI[x]._25um_low && r->nv._25um_prev <= CAN_AQHI[x]._25um_high)
+            if (ref_PM25 >= CAN_AQHI[x]._25um_low && ref_PM25 <= CAN_AQHI[x]._25um_high)
             {
                 stat_25um = x;
             }
@@ -749,12 +771,16 @@ bool AQI::GetAqi(struct AQI_info *r)
         r->aqi_bnd_low = CAN_AQHI[stat_25um]._val_low;
         r->aqi_bnd = stat_25um+1;
         r->aqi_index = stat_25um+1;     // no band boundery values defined for AQHI
-        r->aqi_indicator = true;
+        r->aqi_indicator = PM25;
     }
     else   //... other areas to add here and in aqi_area.h
         return(false);
 
-    // succesfully completed
+    // set reference value used
+    if (r->aqi_indicator == PM25) r->aqi_pmvalue = ref_PM25;
+    else r->aqi_pmvalue = ref_PM10;
+
+    // successfully completed
     return(true);
 }
 

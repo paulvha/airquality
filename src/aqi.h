@@ -29,6 +29,9 @@
  **********************************************************************
  * Version 1.0 / March 2019
  * - Initial version by paulvha
+ *
+ * version 1.0.1 / March 2019
+ * -  Added base-option for PM2.5 and PM10
  */
 
 #ifndef AQI_H
@@ -64,13 +67,20 @@ typedef struct AQI_info {
 
     float   aqi_index;            // AQI calculated
     char    aqi_name[25];         // AQI corresponding name
-    bool    aqi_indicator;        // True: AQI driven by PM2.5 value, false AQI driven by PM10
+    bool    base ;                // HISTORY : Long term / YESTERDAY previous day PM25 and PM10 used
+    bool    aqi_indicator;        // PM25: AQI driven by PM2.5 value, PM10:  AQI driven by PM10
+    float   aqi_pmvalue;          // the value used either PM25 or PM10
     uint8_t aqi_bnd;              // pollution band number
     float   aqi_bnd_low;          // pollution band low value
     float   aqi_bnd_high;         // pollution band high value
 
     struct AQI_NVRAM nv;          // nvram values for reference
 };
+
+#define YESTERDAY true
+#define HISTORY false
+#define PM25 true
+#define PM10 false
 
 /* Holds the within-hour and within-day values information.
  * These are volatile and are stored in RAM
@@ -150,17 +160,20 @@ class AQI
     void Capture(float um25, float um10);
 
     /**
-     * @brief : get the stored information and air quality index.
-     * @param r: pointer to structure to return the values
+     * @brief : calculate the AQI status based on the stored values
+     * @param r : structure to store return values
+     * @param base :
+     *  YESTERDAY : will use the PM25 and PM10 from previous day to compare
+     *  HISTORY : will use the long term PM25 and PM10 values to compare
      *
      * This will include a generated air quality index information
      * depending on the selected region.
      *
      * @return
-     *  false  : no values stored (yet) or no region : no reporting possible
+     *  false  : no values stored (yet) or no area : no reporting possible
      *  true   : succesfully completed
      */
-    bool GetAqi(struct AQI_info *r);
+    bool GetAqi(struct AQI_info *r, bool base = HISTORY);
 
     /**
      * @brief : read current statistics stored in volatile RAM

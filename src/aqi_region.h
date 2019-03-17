@@ -31,6 +31,9 @@
  **********************************************************************
  * Version 1.0 / March 2019
  * - Initial version by paulvha
+ *
+ * version 1.0.1 / March 2019
+ * -  Added base-option for PM2.5 and PM10
  */
 
 #ifndef AQI_AREAH
@@ -230,13 +233,13 @@ static struct AQI_area AQI_INDIA[6] = {
  * https://en.wikipedia.org/wiki/Air_Quality_Health_Index_(Canada)
  *
  * First, the average concentration of the 3 substances (O3, NO2, PM2.5) is calculated at each station
- * within a community for the 3 preceding hours
- * (WE WILL USE THE PREVIOUS DAY PM2.5 VALUE)
+ * within a community for the 3 preceding hours. We use the average PM2.5 value.
+ *
  *
  * Second, the 3 hour "community average" for each parameter is calculated from the 3 hour substance
  * averages at the available stations. If no stations are available for a parameter, that parameter
  * is set to "Not Available". This part of the process results in 3 community parameter averages.
- * (WE WILL SET AS "Not Available". PREVIOUS DAY IS ALREADY 24 AVERAGE HOURS)
+ * We use "Not Available" and the averaged PM2.5 value.
  *
  * Third, if all three community parameter averages are available, a community AQHI is calculated.
  * The formula is:
@@ -244,7 +247,7 @@ static struct AQI_area AQI_INDIA[6] = {
  * AQHI = (1000/10.4) * ((e^(0.000537*O3) - 1) + (e^(0.000871*NO2) - 1) + (e^(0.000487*PM2.5) -1))
  * The result is then rounded to the nearest positive integer; a calculation less than 0.5 is rounded up to 1.
  *
- * simplified the above AQHI formula using Taylor series approximation as follows:
+ * Simplifying the above AQHI formula using Taylor series approximation as follows:
  *
  * AQHI     ~ 10/10.4*100*{(1+0.000871*NO2)-1 +(1+0.000537*O3)-1 + (1+0.000487*PM2.5)–1}
  *          = 0.084 * NO2 + 0.052 * O3 + 0.047 * PM2.5
@@ -264,7 +267,7 @@ static struct AQI_area AQI_INDIA[6] = {
  * poor/high <=>  high qaulity = 90% (document 90%)
  *
  *
- * The good & bad: we get bad results at the nearly at the same time....  no matter what scale is used.
+ * The good & bad: we get high pollution at the nearly the same time....  no matter what scale is used.
  */
 
 static struct AQI_area CAN_AQI[5] = {
