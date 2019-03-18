@@ -26,7 +26,7 @@ PM2.5 and/or PM10 to determine an index. So it is not a 100% correct.
 
 I have used the Air Quality definitions from the USA, Europe, India, Canada and UK.
 
-It is designed and tested only for ESP32. See document for reasons
+It is designed and tested for ESP32 and supports ESP8266. See document for reasons
 
 ## Prerequisites
 Examples 10 has a dependency on other libraries. Documented in sketch.
@@ -46,6 +46,11 @@ Please see the description in the top of the sketch and read the documentation (
 ### version 1.0.1 / March 2019
  * Added base-option to GetAqi()
  * number cosmetic changes
+
+### version 1.0.2 / March 2019
+ * Added support for ESP8266-thing from Sparkfun (https://www.sparkfun.com/products/13231)
+ * MAKE SURE TO READ the remark about reset in the sketch and document
+ * some cosmetic changes
 
 ## Author
  * Paul van Haastrecht (paulvha@hotmail.com)
