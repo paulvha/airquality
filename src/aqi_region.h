@@ -39,7 +39,7 @@
 #ifndef AQI_AREAH
 #define AQI_AREAH
 
-typedef enum region_t {
+enum region_t {
     NOREGION = 0,
     USA = 1,                // EPA
     EUROPE1 = 2,            // CAQI PM10
@@ -50,7 +50,7 @@ typedef enum region_t {
     CANADA2 = 7             // AHQI
 };
 
-typedef struct AQI_region {
+struct AQI_region {
     region_t  ind;
     char      name[20];
 };
@@ -68,7 +68,7 @@ static struct AQI_region regions[8] = {
 };
 
 /* To define the region AQI-data to compare the measured values against */
-typedef struct AQI_area {
+struct AQI_area {
     uint8_t ind;                // offset number
     char    cat_name[25];       // name for band
     float   _val_low;           // AQI low value for band

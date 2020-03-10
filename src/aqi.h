@@ -44,7 +44,7 @@
 
 /* Holds the after-day values as stored in NVRAM
  * Can be returned as part of the GetNv() call */
-typedef struct AQI_NVRAM
+struct AQI_NVRAM
 {
     uint8_t  _region;             // region is selected
     uint16_t _cnt;                // number of days in total
@@ -63,7 +63,7 @@ typedef struct AQI_NVRAM
 
 /* Holds the Air Quality Index (AQI) information
  * return values from GetAqi() */
-typedef struct AQI_info {
+struct AQI_info {
 
     float   aqi_index;            // AQI calculated
     char    aqi_name[25];         // AQI corresponding name
@@ -85,7 +85,7 @@ typedef struct AQI_info {
 /* Holds the within-hour and within-day values information.
  * These are volatile and are stored in RAM
  * returns with the ReadRam() call */
-typedef struct AQI_stats
+struct AQI_stats
 {
     // hourly
     float    _within_hr_25um;     // total 2.5um mass values
@@ -106,7 +106,7 @@ typedef struct AQI_stats
 };
 
 /* needed for conversion float IEE754 */
-typedef union {
+union {
     byte array[4];
     float value;
 } FloatToBYTE;

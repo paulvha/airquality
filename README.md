@@ -52,6 +52,9 @@ Please see the description in the top of the sketch and read the documentation (
  * MAKE SURE TO READ the remark about reset in the sketch and document
  * some cosmetic changes
 
+### version 1.0.3 / March 2020
+ * Fixed compiler warnings with IDE 1.8.12
+
 ## Author
  * Paul van Haastrecht (paulvha@hotmail.com)
 
