@@ -106,10 +106,10 @@ struct AQI_stats
 };
 
 /* needed for conversion float IEE754 */
-union {
+union FloatToBYTE {
     byte array[4];
     float value;
-} FloatToBYTE;
+} ;
 
 
 /**
